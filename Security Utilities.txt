@@ -1,0 +1,85 @@
+Security Utilities
+https://learn.microsoft.com/en-us/sysinternals/downloads/logonsessions
+autorunsc.exe
+
+LinuxTools
+Sessions 
+aide
+
+systemctl list-unit-files --state=enabled; systemctl list-timers --all
+ls -la /etc/systemd/system /usr/lib/systemd/system | sort -k6,7 | tail -20
+crontab -l; for u in $(cut -d: -f1 /etc/passwd); do crontab -u $u -l 2>/dev/null; done
+ls -la /etc/cron* /var/spool/cron* /etc/rc.local /etc/profile.d/
+find / -name authorized_keys -exec ls -la {} \; 2>/dev/null   # rogue SSH keys
+cat /etc/ld.so.preload 2>/dev/null                            # should usually be empty
+awk -F: '$3==0' /etc/passwd                                   # extra UID 0 accounts
+awk -F: '$2=="" ' /etc/shadow                                 # empty passwords
+grep -r "" /etc/sudoers /etc/sudoers.d/ | grep -v '^#'
+
+debsums -c            # Debian/Ubuntu: modified package files
+rpm -Va               # RHEL/CentOS/Fedora
+find / -xdev -type f -mtime -1 2>/dev/null   # files changed in last day
+
+
+Process Utilities
+https://learn.microsoft.com/en-us/sysinternals/downloads/procmon
+pslist
+handle
+listdlls
+
+LinuxTools
+ps auxf                 # tree view, look for odd parent/child (apache -> sh)
+pstree -aps
+lsof -p <PID>           # open files and sockets (handle.exe equivalent)
+cat /proc/<PID>/maps    # loaded libs (listdlls equivalent)
+ls -l /proc/<PID>/exe /proc/<PID>/cwd   # "(deleted)" is a red flag
+cat /proc/<PID>/cmdline | tr '\0' ' '
+
+auditctl -a always,exit -F arch=b64 -S execve -k exec
+auditctl -w /etc/passwd -p wa -k passwd
+auditctl -w /etc/shadow -p wa -k shadow
+auditctl -w /etc/ssh/sshd_config -p wa -k sshd
+auditctl -w /etc/crontab -p wa -k cron
+auditctl -w /etc/sudoers -p wa -k sudo
+ausearch -k exec -ts recent -i
+
+Networking
+https://learn.microsoft.com/en-us/sysinternals/downloads/tcpview
+tcpvcon.exe
+
+LinuxTools
+
+ss -tulpn               # listeners with owning process
+ss -tnp state established   # active outbound connections with PID
+lsof -i -P -n
+iftop / nethogs         # live bandwidth per host / per process
+
+File&Disk
+https://learn.microsoft.com/en-us/sysinternals/downloads/accesschk
+streams
+https://www.voidtools.com
+(Download Installer)
+
+LinuxTools
+
+find / -xdev -perm -4000 -type f 2>/dev/null    # SUID (compare to a baseline)
+find / -xdev -perm -2000 -type f 2>/dev/null    # SGID
+find / -xdev -type f -perm -o+w 2>/dev/null     # world-writable files
+find / -xdev -type d -perm -o+w ! -perm -1000 2>/dev/null   # writable dirs w/o sticky bit
+getcap -r / 2>/dev/null                         # file capabilities (privesc vector)
+sudo -l; getfacl -R /etc 2>/dev/null | grep -B5 "other::.w"
+lsattr -R /etc 2>/dev/null | grep -- '-i-'      # immutable flags (can hide malware)
+find / -xdev -nouser -o -nogroup 2>/dev/null    # orphaned files
+
+find / -xdev -name ".*" -type f -path "*/tmp/*" 2>/dev/null
+getfattr -R -d /home /tmp 2>/dev/null
+
+Baseline workflow
+
+mkdir -p /root/base && cd /root/base
+ss -tulpn > ports.txt
+ps -eo user,pid,ppid,cmd --sort=pid > procs.txt
+find / -xdev -perm -4000 2>/dev/null | sort > suid.txt
+systemctl list-unit-files --state=enabled > units.txt
+for u in $(cut -d: -f1 /etc/passwd); do echo "== $u"; crontab -u $u -l 2>/dev/null; done > cron.txt
+cp /etc/passwd /etc/shadow /etc/sudoers . ; find / -name authorized_keys 2>/dev/null > keys.txt
